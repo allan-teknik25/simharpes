@@ -2,6 +2,8 @@ import "./globals.css";
 
 import Link from "next/link";
 
+import { ThemeProvider } from "next-themes";
+
 import {
   LayoutDashboard,
   Plane,
@@ -28,6 +30,9 @@ export default function RootLayout({
     <html lang="en">
 
       <body className="bg-[#0B1120] text-white">
+        <ThemeProvider attribute="class">
+          {children}
+        </ThemeProvider>
 
         <main className="min-h-screen flex">
 

@@ -1,5 +1,7 @@
 "use client";
 
+import ThemeToggle from "./components/ThemeToggle";
+
 import { useEffect, useState } from "react";
 
 import { getAircraftData } from "../services/googleSheet";
@@ -121,6 +123,8 @@ export default function Home() {
           </p>
 
         </div>
+
+        <ThemeToggle />
 
         <div className="bg-green-500/20 border border-green-500/30 px-5 py-3 rounded-xl text-green-400">
           Fleet Ready
