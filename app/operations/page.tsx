@@ -4,25 +4,27 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
 
-  CalendarDays,
+  getAircraftData,
+  getMaintenanceRules,
+
+} from "@/services/googleSheet";
+
+import {
+
+  Radar,
+  Plane,
   AlertTriangle,
   ShieldCheck,
-  BrainCircuit,
-  ChevronRight,
-  Radar,
   Wrench,
-  Plane,
-  Clock3,
-  ShieldAlert,
   Activity,
+  ChevronRight,
+  Gauge,
+  BrainCircuit,
+  ShieldAlert,
 
 } from "lucide-react";
 
-import {
-  getAircraftData,
-} from "@/services/googleSheet";
-
-export default function StaggeringPage() {
+export default function OperationsPage() {
 
   // =====================================================
   // STATES
@@ -31,8 +33,8 @@ export default function StaggeringPage() {
   const [fleet, setFleet] =
     useState<any[]>([]);
 
-  const [selectedDate, setSelectedDate] =
-    useState(new Date());
+  const [rules, setRules] =
+    useState<any[]>([]);
 
   // =====================================================
   // LOAD DATA
@@ -45,7 +47,12 @@ export default function StaggeringPage() {
       const aircraft =
         await getAircraftData();
 
+      const maintenanceRules =
+        await getMaintenanceRules();
+
       setFleet(aircraft);
+
+      setRules(maintenanceRules);
 
     }
 
@@ -54,160 +61,121 @@ export default function StaggeringPage() {
   }, []);
 
   // =====================================================
-  // SASBINPUAN
+  // READINESS
   // =====================================================
 
-  const SASBINPUAN = 70;
+  const serviceable =
+    fleet.filter((x) =>
+
+      x.MaintenanceStatus === "NONE" &&
+      x.CertificateStatus === "VALID" &&
+      x.SparepartStatus === "READY"
+
+    );
+
+  const maintenance =
+    fleet.filter((x) =>
+
+      x.MaintenanceStatus !== "NONE"
+
+    );
+
+  const aog =
+    fleet.filter((x) =>
+
+      x.CertificateStatus === "EXPIRED" ||
+      x.SparepartStatus === "WAITING"
+
+    );
+
+  const readinessRate =
+    ((serviceable.length / 10) * 100)
+      .toFixed(1);
 
   // =====================================================
-  // MAINT FORECAST
+  // HEALTH ENGINE
   // =====================================================
 
-  const planningData =
-    fleet.map((x: any) => {
+  function getHealth(
+    aircraft: any
+  ) {
 
-      const airframe =
-        Number(x.AirframeFH);
+    let score = 100;
 
-      const remaining =
-        400 - airframe;
+    if (
+      aircraft.MaintenanceStatus !== "NONE"
+    )
+      score -= 25;
 
-      let priority =
-        "LOW";
+    if (
+      aircraft.CertificateStatus === "EXPIRED"
+    )
+      score -= 40;
 
-      if (remaining <= 20)
-        priority = "CRITICAL";
+    if (
+      aircraft.SparepartStatus === "WAITING"
+    )
+      score -= 20;
 
-      else if (remaining <= 50)
-        priority = "HIGH";
+    if (
+      Number(aircraft.AirframeFH) >= 350
+    )
+      score -= 15;
 
-      else if (remaining <= 100)
-        priority = "MEDIUM";
+    return Math.max(score, 0);
 
-      const predictedDate =
-        new Date();
+  }
 
-      predictedDate.setDate(
-        predictedDate.getDate() +
-        Math.max(
-          Math.floor(remaining / 5),
-          1
-        )
-      );
+  // =====================================================
+  // MISSION RECOMMENDATION
+  // =====================================================
+
+  const missionRecommendation =
+    [...fleet]
+
+      .filter((x) =>
+
+        x.MaintenanceStatus === "NONE" &&
+        x.CertificateStatus === "VALID" &&
+        x.SparepartStatus === "READY"
+
+      )
+
+      .sort(
+        (a, b) =>
+          getHealth(b) - getHealth(a)
+      )
+
+      .slice(0, 3);
+
+  // =====================================================
+  // FORECAST
+  // =====================================================
+
+  const forecast =
+    fleet.map((x) => {
+
+      const remain =
+        400 - Number(x.AirframeFH);
 
       return {
 
         aircraft:
           x.Aircraft,
 
-        fh:
-          airframe,
-
-        remaining,
-
-        priority,
-
-        plannedDate:
-          predictedDate,
-
-        maintenance:
-          remaining <= 20
-            ? "P400"
-            : remaining <= 50
-            ? "P200"
-            : "Inspection",
+        remaining:
+          remain,
 
       };
 
-    });
+    })
 
-  // =====================================================
-  // READINESS SIMULATION
-  // =====================================================
+    .sort(
+      (a, b) =>
+        a.remaining - b.remaining
+    )
 
-  const activeMaint =
-    planningData.filter(
-
-      (x) =>
-        x.priority === "CRITICAL" ||
-        x.priority === "HIGH"
-
-    ).length;
-
-  const predictedReady =
-    10 - activeMaint;
-
-  const predictedRate =
-    (predictedReady / 10) * 100;
-
-  // =====================================================
-  // AI RECOMMENDATION
-  // =====================================================
-
-  const recommendation =
-    predictedRate < SASBINPUAN
-
-      ? `
-        WARNING:
-        Readiness predicted below Sasbinpuan.
-        Delay one maintenance slot.
-      `
-
-      : `
-        GOOD:
-        Maintenance staggering balanced.
-      `;
-
-  // =====================================================
-  // DATE
-  // =====================================================
-
-  function formatDate(
-    date: Date
-  ) {
-
-    return date.toLocaleDateString(
-      "en-GB",
-      {
-
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-
-      }
-    );
-
-  }
-
-  // =====================================================
-  // NAVIGATE DATE
-  // =====================================================
-
-  function previousDay() {
-
-    const newDate =
-      new Date(selectedDate);
-
-    newDate.setDate(
-      newDate.getDate() - 1
-    );
-
-    setSelectedDate(newDate);
-
-  }
-
-  function nextDay() {
-
-    const newDate =
-      new Date(selectedDate);
-
-    newDate.setDate(
-      newDate.getDate() + 1
-    );
-
-    setSelectedDate(newDate);
-
-  }
+    .slice(0, 5);
 
   // =====================================================
   // UI
@@ -238,10 +206,12 @@ export default function StaggeringPage() {
         overflow-hidden
       ">
 
+        {/* GLOW */}
+
         <div className="
           absolute
-          right-[-100px]
           top-[-100px]
+          right-[-100px]
           w-[320px]
           h-[320px]
           rounded-full
@@ -264,9 +234,9 @@ export default function StaggeringPage() {
               items-center gap-2
               bg-cyan-500/10
               border border-cyan-500/20
+              text-cyan-400
               px-4 py-2
               rounded-xl
-              text-cyan-400
               mb-5
             ">
 
@@ -274,7 +244,7 @@ export default function StaggeringPage() {
                 w-4 h-4
               " />
 
-              Tactical Maintenance Planner
+              Tactical Operations Center
 
             </div>
 
@@ -282,7 +252,7 @@ export default function StaggeringPage() {
               text-5xl font-bold
             ">
 
-              Staggering Planner V3
+              Fleet Operations
 
             </h1>
 
@@ -292,8 +262,8 @@ export default function StaggeringPage() {
               text-lg
             ">
 
-              AI-Based Tactical Maintenance
-              Scheduling & Readiness Simulation
+              Real-Time Tactical Readiness
+              Monitoring System
 
             </p>
 
@@ -311,9 +281,10 @@ export default function StaggeringPage() {
             justify-center
           ">
 
-            <CalendarDays className="
+            <Radar className="
               w-20 h-20
               text-cyan-400
+              animate-pulse
             " />
 
           </div>
@@ -323,64 +294,7 @@ export default function StaggeringPage() {
       </div>
 
       {/* ================================================= */}
-      {/* DATE CONTROL */}
-      {/* ================================================= */}
-
-      <div className="
-        bg-[#111827]
-        border border-gray-800
-        rounded-2xl
-        p-5
-        mb-6
-        flex justify-between
-        items-center
-      ">
-
-        <button
-          onClick={previousDay}
-          className="
-            bg-[#1F2937]
-            hover:bg-cyan-500/20
-            border border-gray-700
-            px-5 py-3
-            rounded-xl
-            transition-all
-          "
-        >
-
-          ← Previous
-
-        </button>
-
-        <div className="
-          text-2xl font-bold
-          text-cyan-400
-        ">
-
-          {formatDate(selectedDate)}
-
-        </div>
-
-        <button
-          onClick={nextDay}
-          className="
-            bg-[#1F2937]
-            hover:bg-cyan-500/20
-            border border-gray-700
-            px-5 py-3
-            rounded-xl
-            transition-all
-          "
-        >
-
-          Next →
-
-        </button>
-
-      </div>
-
-      {/* ================================================= */}
-      {/* TOP GRID */}
+      {/* TOP CARDS */}
       {/* ================================================= */}
 
       <div className="
@@ -390,7 +304,7 @@ export default function StaggeringPage() {
         mb-6
       ">
 
-        {/* READY */}
+        {/* SERVICEABLE */}
 
         <div className="
           bg-[#111827]
@@ -411,7 +325,7 @@ export default function StaggeringPage() {
               text-gray-400
             ">
 
-              Predicted Ready
+              Serviceable
 
             </div>
 
@@ -427,7 +341,7 @@ export default function StaggeringPage() {
             text-green-400
           ">
 
-            {predictedReady}
+            {serviceable.length}
 
           </div>
 
@@ -454,7 +368,7 @@ export default function StaggeringPage() {
               text-gray-400
             ">
 
-              Scheduled Maintenance
+              Maintenance
 
             </div>
 
@@ -470,20 +384,20 @@ export default function StaggeringPage() {
             text-yellow-400
           ">
 
-            {activeMaint}
+            {maintenance.length}
 
           </div>
 
         </div>
 
-        {/* READINESS */}
+        {/* AOG */}
 
         <div className="
           bg-[#111827]
           border border-gray-800
           rounded-2xl
           p-6
-          hover:border-cyan-400
+          hover:border-red-400
           hover:scale-[1.02]
           transition-all
         ">
@@ -497,12 +411,12 @@ export default function StaggeringPage() {
               text-gray-400
             ">
 
-              Readiness Simulation
+              AOG
 
             </div>
 
-            <Activity className="
-              text-cyan-400
+            <AlertTriangle className="
+              text-red-400
             " />
 
           </div>
@@ -510,10 +424,10 @@ export default function StaggeringPage() {
           <div className="
             text-6xl font-bold
             mt-5
-            text-cyan-400
+            text-red-400
           ">
 
-            {predictedRate.toFixed(0)}%
+            {aog.length}
 
           </div>
 
@@ -541,7 +455,7 @@ export default function StaggeringPage() {
         ">
 
           {/* ============================================= */}
-          {/* TABLE */}
+          {/* READINESS */}
           {/* ============================================= */}
 
           <div className="
@@ -563,7 +477,7 @@ export default function StaggeringPage() {
                   text-3xl font-bold
                 ">
 
-                  Maintenance Planning Board
+                  Operational Readiness
 
                 </h2>
 
@@ -571,7 +485,123 @@ export default function StaggeringPage() {
                   text-gray-400 mt-2
                 ">
 
-                  Tactical Fleet Maintenance Schedule
+                  Tactical Readiness Rate
+
+                </p>
+
+              </div>
+
+              <Gauge className="
+                w-8 h-8
+                text-cyan-400
+              " />
+
+            </div>
+
+            {/* DONUT */}
+
+            <div className="
+              flex flex-col
+              items-center
+              justify-center
+            ">
+
+              <div className="
+                relative
+                w-72 h-72
+                rounded-full
+                border-[18px]
+                border-cyan-400
+                flex
+                items-center
+                justify-center
+                hover:scale-105
+                transition-all
+              ">
+
+                <div className="
+                  text-center
+                ">
+
+                  <div className="
+                    text-6xl font-bold
+                  ">
+
+                    {readinessRate}%
+
+                  </div>
+
+                  <div className="
+                    text-gray-400 mt-2
+                  ">
+
+                    READINESS
+
+                  </div>
+
+                </div>
+
+              </div>
+
+              {/* STATUS */}
+
+              <div className={`
+                mt-6
+                px-5 py-3
+                rounded-xl
+                text-lg font-semibold
+
+                ${
+                  Number(readinessRate) >= 70
+                    ? "bg-green-500/10 text-green-400 border border-green-500/30"
+                    : "bg-red-500/10 text-red-400 border border-red-500/30"
+                }
+              `}>
+
+                {
+                  Number(readinessRate) >= 70
+                    ? "GOOD — ABOVE SASBINPUAN"
+                    : "WARNING — BELOW SASBINPUAN"
+                }
+
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* ============================================= */}
+          {/* FLEET STATUS */}
+          {/* ============================================= */}
+
+          <div className="
+            bg-[#111827]
+            border border-gray-800
+            rounded-3xl
+            p-6
+          ">
+
+            <div className="
+              flex justify-between
+              items-center
+              mb-6
+            ">
+
+              <div>
+
+                <h2 className="
+                  text-3xl font-bold
+                ">
+
+                  Fleet Status Board
+
+                </h2>
+
+                <p className="
+                  text-gray-400 mt-2
+                ">
+
+                  Real-Time Aircraft Tactical Status
 
                 </p>
 
@@ -605,19 +635,15 @@ export default function StaggeringPage() {
                     </th>
 
                     <th className="text-left py-4">
-                      Current FH
+                      Status
                     </th>
 
                     <th className="text-left py-4">
-                      Remaining
+                      Health
                     </th>
 
                     <th className="text-left py-4">
-                      Maintenance
-                    </th>
-
-                    <th className="text-left py-4">
-                      Priority
+                      Operational
                     </th>
 
                   </tr>
@@ -626,8 +652,12 @@ export default function StaggeringPage() {
 
                 <tbody>
 
-                  {planningData.map(
-                    (x, i) => (
+                  {fleet.map((x, i) => {
+
+                    const health =
+                      getHealth(x);
+
+                    return (
 
                       <tr
                         key={i}
@@ -640,34 +670,29 @@ export default function StaggeringPage() {
 
                         <td className="
                           py-4 font-semibold
-                          text-cyan-400
                         ">
 
-                          {x.aircraft}
+                          {x.Aircraft}
 
                         </td>
 
-                        <td className="
-                          py-4
-                        ">
+                        <td className="py-4">
 
-                          {x.fh} FH
+                          <span className={`
+                            px-3 py-1
+                            rounded-lg
+                            text-sm
 
-                        </td>
+                            ${
+                              x.MaintenanceStatus === "NONE"
+                                ? "bg-green-500/10 text-green-400"
+                                : "bg-yellow-500/10 text-yellow-400"
+                            }
+                          `}>
 
-                        <td className="
-                          py-4
-                        ">
+                            {x.MaintenanceStatus}
 
-                          {x.remaining} FH
-
-                        </td>
-
-                        <td className="
-                          py-4
-                        ">
-
-                          {x.maintenance}
+                          </span>
 
                         </td>
 
@@ -676,149 +701,40 @@ export default function StaggeringPage() {
                         ">
 
                           <span className={`
-                            px-3 py-1
-                            rounded-lg
-                            text-sm
+                            font-bold
 
                             ${
-                              x.priority === "CRITICAL"
-
-                                ? "bg-red-500/10 text-red-400"
-
-                                : x.priority === "HIGH"
-
-                                ? "bg-yellow-500/10 text-yellow-400"
-
-                                : x.priority === "MEDIUM"
-
-                                ? "bg-cyan-500/10 text-cyan-400"
-
-                                : "bg-green-500/10 text-green-400"
+                              health >= 80
+                                ? "text-green-400"
+                                : health >= 60
+                                ? "text-yellow-400"
+                                : "text-red-400"
                             }
                           `}>
 
-                            {x.priority}
+                            {health}%
 
                           </span>
 
                         </td>
 
+                        <td className="
+                          py-4 text-gray-300
+                        ">
+
+                          {x.OperationalStatus}
+
+                        </td>
+
                       </tr>
 
-                    )
-                  )}
+                    );
+
+                  })}
 
                 </tbody>
 
               </table>
-
-            </div>
-
-          </div>
-
-          {/* ============================================= */}
-          {/* TIMELINE */}
-          {/* ============================================= */}
-
-          <div className="
-            bg-[#111827]
-            border border-gray-800
-            rounded-3xl
-            p-6
-          ">
-
-            <div className="
-              flex items-center gap-3
-              mb-6
-            ">
-
-              <Clock3 className="
-                text-cyan-400
-              " />
-
-              <h2 className="
-                text-3xl font-bold
-              ">
-
-                Tactical Timeline
-
-              </h2>
-
-            </div>
-
-            <div className="
-              space-y-4
-            ">
-
-              {planningData
-                .slice(0, 5)
-                .map((x, i) => (
-
-                  <div
-                    key={i}
-                    className="
-                      flex justify-between
-                      items-center
-                      bg-[#1F2937]
-                      border border-gray-700
-                      rounded-2xl
-                      p-5
-                      hover:border-cyan-400
-                      transition-all
-                    "
-                  >
-
-                    <div>
-
-                      <div className="
-                        text-xl font-bold
-                        text-cyan-400
-                      ">
-
-                        {x.aircraft}
-
-                      </div>
-
-                      <div className="
-                        text-gray-400
-                        mt-1
-                      ">
-
-                        {x.maintenance}
-
-                      </div>
-
-                    </div>
-
-                    <div className="
-                      text-right
-                    ">
-
-                      <div className="
-                        text-sm text-gray-400
-                      ">
-
-                        Planned Date
-
-                      </div>
-
-                      <div className="
-                        font-semibold
-                        mt-1
-                      ">
-
-                        {formatDate(
-                          x.plannedDate
-                        )}
-
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                ))
-              }
 
             </div>
 
@@ -835,7 +751,7 @@ export default function StaggeringPage() {
         ">
 
           {/* ============================================= */}
-          {/* AI DECISION */}
+          {/* MISSION RECOMMENDATION */}
           {/* ============================================= */}
 
           <div className="
@@ -858,58 +774,76 @@ export default function StaggeringPage() {
                 text-2xl font-bold
               ">
 
-                AI Decision Engine
+                Mission Recommendation
 
               </h2>
 
             </div>
 
-            <div className={`
-              p-5
-              rounded-2xl
-              border
+            <div className="
+              space-y-4
+            ">
 
-              ${
-                predictedRate < SASBINPUAN
+              {missionRecommendation.map(
+                (x, i) => (
 
-                  ? `
-                    bg-red-500/10
-                    border-red-500/30
-                    text-red-400
-                  `
+                  <div
+                    key={i}
+                    className="
+                      bg-[#1F2937]
+                      border border-gray-700
+                      rounded-2xl
+                      p-4
+                      hover:border-cyan-400
+                      transition-all
+                    "
+                  >
 
-                  : `
-                    bg-green-500/10
-                    border-green-500/30
-                    text-green-400
-                  `
-              }
-            `}>
+                    <div className="
+                      flex justify-between
+                      items-center
+                    ">
 
-              <div className="
-                flex items-start gap-3
-              ">
+                      <div>
 
-                <AlertTriangle className="
-                  mt-1
-                " />
+                        <div className="
+                          text-xl font-bold
+                          text-cyan-400
+                        ">
 
-                <div className="
-                  whitespace-pre-line
-                ">
+                          {x.Aircraft}
 
-                  {recommendation}
+                        </div>
 
-                </div>
+                        <div className="
+                          text-gray-400 text-sm mt-1
+                        ">
 
-              </div>
+                          Health:
+                          {" "}
+                          {getHealth(x)}%
+
+                        </div>
+
+                      </div>
+
+                      <ChevronRight className="
+                        text-gray-500
+                      " />
+
+                    </div>
+
+                  </div>
+
+                )
+              )}
 
             </div>
 
           </div>
 
           {/* ============================================= */}
-          {/* ALERTS */}
+          {/* FORECAST */}
           {/* ============================================= */}
 
           <div className="
@@ -932,7 +866,7 @@ export default function StaggeringPage() {
                 text-2xl font-bold
               ">
 
-                Critical Alerts
+                Maintenance Forecast
 
               </h2>
 
@@ -942,20 +876,14 @@ export default function StaggeringPage() {
               space-y-4
             ">
 
-              {planningData
-
-                .filter(
-                  (x) =>
-                    x.priority === "CRITICAL"
-                )
-
-                .map((x, i) => (
+              {forecast.map(
+                (x, i) => (
 
                   <div
                     key={i}
                     className="
-                      bg-red-500/10
-                      border border-red-500/20
+                      bg-[#1F2937]
+                      border border-gray-700
                       rounded-2xl
                       p-4
                     "
@@ -969,8 +897,8 @@ export default function StaggeringPage() {
                       <div>
 
                         <div className="
-                          font-bold
-                          text-red-400
+                          text-lg font-bold
+                          text-cyan-400
                         ">
 
                           {x.aircraft}
@@ -978,27 +906,29 @@ export default function StaggeringPage() {
                         </div>
 
                         <div className="
-                          text-sm
-                          text-gray-300
-                          mt-1
+                          text-gray-400 text-sm mt-1
                         ">
 
-                          Immediate maintenance required
+                          Remaining:
+                          {" "}
+                          {x.remaining}
+                          {" "}
+                          FH
 
                         </div>
 
                       </div>
 
-                      <ChevronRight className="
-                        text-red-400
+                      <AlertTriangle className="
+                        text-yellow-400
                       " />
 
                     </div>
 
                   </div>
 
-                ))
-              }
+                )
+              )}
 
             </div>
 

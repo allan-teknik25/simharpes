@@ -1,30 +1,27 @@
 import axios from "axios";
 
-const SHEET_ID = "1tCJ8k8AwpQesVvx9bfH4mm7m-RYQ6FZPei6xmiI-w8E";
+const SPREADSHEET_ID = "1tCJ8k8AwpQesVvx9bfH4mm7m-RYQ6FZPei6xmiI-w8E";
 
-export async function getAircraftData() {
-
-  const url = `https://opensheet.elk.sh/${SHEET_ID}/Aircraft_Master`;
-
-  const response = await axios.get(url);
-
-  return response.data;
+function sheetUrl(sheetName: string) {
+  return `https://opensheet.elk.sh/${SPREADSHEET_ID}/${encodeURIComponent(sheetName)}`;
 }
 
-export async function getStaggeringData() {
+export async function getAircraftData() {
+  const res = await axios.get(sheetUrl("Aircraft_Master"));
+  return res.data;
+}
 
-  const url = `https://opensheet.elk.sh/${SHEET_ID}/Staggering`;
-
-  const response = await axios.get(url);
-
-  return response.data;
+export async function getMaintenanceRules() {
+  const res = await axios.get(sheetUrl("Maintenance_Rules"));
+  return res.data;
 }
 
 export async function getMaintenanceLogbook() {
+  const res = await axios.get(sheetUrl("Maintenance_Logbook"));
+  return res.data;
+}
 
-  const url = `https://opensheet.elk.sh/${SHEET_ID}/Maintenance_Logbook`;
-
-  const response = await axios.get(url);
-
-  return response.data;
+export async function getReadinessTrend() {
+  const res = await axios.get(sheetUrl("Readiness_Trend"));
+  return res.data;
 }
