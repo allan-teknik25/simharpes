@@ -5,10 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import {
   getMaintenanceLogbook,
   getAircraftData,
-} from "../../services/googleSheet";
+  getMaintenanceApproval,
+} from "../../../services/googleSheet";
 
 import { submitLogbook }
-from "../../services/logbookApi";
+from "../../../services/logbookApi";
 
 import {
 
@@ -41,6 +42,8 @@ export default function LogbookPage() {
   const [aircrafts, setAircrafts] =
     useState<any[]>([]);
 
+  const [approvals,setApprovals]=useState<any[]>([]);
+
   const [search, setSearch] =
     useState("");
 
@@ -53,7 +56,7 @@ export default function LogbookPage() {
 
     engineer: "",
 
-    action: "",
+    action: "MAINTENANCE",
 
     flightHourAdded: 0,
 
@@ -65,11 +68,13 @@ export default function LogbookPage() {
 
     landingGearAdded: 0,
 
+    fcuAdded: 0,
+
+    fNozzleAdded: 0,
+    
+    fPumpAdded: 0,
+                    
     maintenanceStatus: "NONE",
-
-    certificateStatus: "VALID",
-
-    sparepartStatus: "READY",
 
     operationalStatus: "HANGAR",
 
@@ -77,29 +82,116 @@ export default function LogbookPage() {
 
   });
 
-  // =====================================================
-  // FETCH DATA
-  // =====================================================
+  const [maintenanceOptions,setMaintenanceOptions]=useState<string[]>([]);
+// =====================================================
+// FETCH DATA
+// =====================================================
 
-  useEffect(() => {
+useEffect(() => {
 
-    async function fetchData() {
+async function fetchData(){
 
-      const logbook =
-        await getMaintenanceLogbook();
+  const logbook =
+    await getMaintenanceLogbook();
 
-      const aircraftData =
-        await getAircraftData();
+  const aircraftData =
+    await getAircraftData();
 
-      setLogs(logbook.reverse());
+  const approvalData =
+    await getMaintenanceApproval();
 
-      setAircrafts(aircraftData);
+  setLogs(logbook.reverse());
 
-    }
+  setAircrafts(aircraftData);
 
-    fetchData();
+  setApprovals(approvalData);
 
-  }, []);
+}
+
+  fetchData();
+
+}, []);
+
+// =====================================================
+// UPDATE MAINTENANCE OPTION
+// =====================================================
+
+useEffect(() => {
+
+  if (!form.aircraft) {
+
+    setMaintenanceOptions([]);
+
+    return;
+
+  }
+
+  // =============================
+  // MAINTENANCE BIASA
+  // =============================
+
+  if (form.action !== "TEST FLIGHT") {
+
+    setMaintenanceOptions([
+      "NONE",
+      "P200",
+      "P400",
+      "ENG1200",
+      "HYD1500",
+      "LG50",
+      "FCU1200",
+      "FN1200",
+      "FP1200",
+    ]);
+
+    return;
+
+  }
+
+  // =============================
+  // TEST FLIGHT
+  // =============================
+
+  const lastMaintenance = approvals
+    .filter(
+      x =>
+        x.Aircraft === form.aircraft &&
+        x.RequestType === "MAINTENANCE" &&
+        x.ApprovalStatus === "APPROVED"
+    )
+    .sort(
+      (a,b)=>
+        new Date(b.RequestDate).getTime()-
+        new Date(a.RequestDate).getTime()
+    )[0];
+
+  if(!lastMaintenance){
+
+    setMaintenanceOptions([]);
+
+    return;
+
+  }
+
+  setMaintenanceOptions([
+    lastMaintenance.Action
+  ]);
+
+  setForm(prev=>({
+
+    ...prev,
+
+    maintenanceStatus:
+      lastMaintenance.Action
+
+  }));
+
+},[
+  form.aircraft,
+  form.action,
+  approvals
+]);
+
 
   // =====================================================
   // HANDLE INPUT
@@ -120,41 +212,94 @@ export default function LogbookPage() {
 
   }
 
+  function handleActionChange(
+  e:any
+  ){
+
+  const value =
+  e.target.value;
+
+
+  let operational =
+  "HANGAR";
+
+
+  if(value==="TEST FLIGHT")
+  operational="TEST FLIGHT";
+
+
+  if(value==="MISSION")
+  operational="MISSION";
+
+
+  if(value==="TRAINING")
+  operational="TRAINING";
+
+
+
+  setForm({
+
+  ...form,
+
+  action:value,
+
+  operationalStatus:operational
+
+  });
+
+
+  }
+
   // =====================================================
   // SUBMIT
   // =====================================================
 
-  async function handleSubmit(
-    e: any
-  ) {
+async function handleSubmit(
+  e: any
+) {
 
-    e.preventDefault();
+  e.preventDefault();
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
+  try {
 
-      await submitLogbook(form);
+    const result =
+    await submitLogbook(form);
+
+
+    if(result.success){
 
       alert(
-        "Maintenance Logbook Submitted"
+        "Logbook berhasil disimpan"
       );
 
       window.location.reload();
 
-    } catch (error) {
+    }
 
-      console.error(error);
+    else{
 
       alert(
-        "Failed Submit Logbook"
+        result.error
       );
 
     }
 
-    setLoading(false);
+
+  } catch (error) {
+
+    console.error(error);
+
+    alert(
+      "Failed Submit Logbook"
+    );
 
   }
+
+  setLoading(false);
+
+}
 
   // =====================================================
   // FILTERED LOG
@@ -179,9 +324,8 @@ export default function LogbookPage() {
   const maintenanceToday =
     logs.filter(
       (x) =>
-        x.Action
-          ?.toLowerCase()
-          .includes("p")
+        x.MaintenanceStatus &&
+        x.MaintenanceStatus !== "NONE"
     ).length;
 
   const missionToday =
@@ -198,99 +342,11 @@ export default function LogbookPage() {
 
   return (
 
-    <div className="min-h-screen bg-[#0B1120] text-white p-6">
-
-      {/* ================================================= */}
-      {/* HERO */}
-      {/* ================================================= */}
-
-      <div className="
-        bg-gradient-to-r
-        from-[#111827]
-        to-[#172033]
-        border border-gray-800
-        rounded-3xl
-        p-8
-        mb-6
-        relative
-        overflow-hidden
-      ">
-
-        {/* GLOW */}
-
-        <div className="
-          absolute
-          right-[-100px]
-          top-[-100px]
-          w-[300px]
-          h-[300px]
-          rounded-full
-          bg-cyan-500/10
-          blur-3xl
-        " />
-
-        <div className="
-          relative z-10
-          flex justify-between items-center
-        ">
-
-          {/* LEFT */}
-
-          <div>
-
-            <div className="
-              inline-flex
-              items-center gap-2
-              bg-cyan-500/10
-              border border-cyan-500/20
-              px-4 py-2
-              rounded-xl
-              text-cyan-400
-              mb-5
-            ">
-
-              <ClipboardList className="w-4 h-4" />
-
-              Engineering Tactical Logbook
-
-            </div>
-
-            <h1 className="text-5xl font-bold">
-
-              Maintenance Logbook
-
-            </h1>
-
-            <p className="text-gray-400 mt-3 text-lg">
-
-              Integrated Aircraft Maintenance
-              Activity Monitoring
-
-            </p>
-
-          </div>
-
-          {/* RIGHT */}
-
-          <div className="
-            hidden md:flex
-            items-center justify-center
-            w-32 h-32
-            rounded-full
-            border-[10px]
-            border-cyan-400
-          ">
-
-            <Radar className="
-              w-16 h-16
-              text-cyan-400
-            " />
-
-          </div>
-
-        </div>
-
-      </div>
+<div
+className="
+p-6
+"
+>
 
       {/* ================================================= */}
       {/* STATS */}
@@ -319,7 +375,7 @@ export default function LogbookPage() {
           ">
 
             <div className="text-gray-400">
-              Total Activities
+              Total Aktivitas
             </div>
 
             <Activity className="
@@ -354,7 +410,7 @@ export default function LogbookPage() {
           ">
 
             <div className="text-gray-400">
-              Maintenance Action
+              Aktivitas Pemeliharaan
             </div>
 
             <Wrench className="
@@ -389,7 +445,7 @@ export default function LogbookPage() {
           ">
 
             <div className="text-gray-400">
-              Mission Activity
+              Riwayat Misi
             </div>
 
             <Plane className="
@@ -447,7 +503,7 @@ export default function LogbookPage() {
               text-2xl font-bold
             ">
 
-              Input Maintenance
+              Input Logbook
 
             </h2>
 
@@ -485,7 +541,7 @@ export default function LogbookPage() {
               >
 
                 <option>
-                  Select Aircraft
+                  Pilih Pesawat
                 </option>
 
                 {aircrafts.map(
@@ -512,7 +568,7 @@ export default function LogbookPage() {
             <input
               type="text"
               name="engineer"
-              placeholder="Engineer Name"
+              placeholder="Masukkan Nama"
               onChange={handleChange}
               className="
                 w-full
@@ -525,19 +581,73 @@ export default function LogbookPage() {
 
             {/* ACTION */}
 
-            <input
-              type="text"
-              name="action"
-              placeholder="Action"
-              onChange={handleChange}
-              className="
-                w-full
-                bg-[#1F2937]
-                border border-gray-700
-                p-3
-                rounded-xl
-              "
-            />
+            <div>
+
+            <p
+            className="
+            text-gray-400
+            text-sm
+            mb-2
+            "
+            >
+
+            Jenis Logbook 
+
+            </p>
+
+
+            <select
+
+            name="action"
+
+            value={form.action}
+
+            onChange={handleActionChange}
+
+            className="
+            w-full
+            bg-[#1F2937]
+            border border-gray-700
+            p-3
+            rounded-xl
+            "
+
+            >
+
+
+            <option value="MAINTENANCE">
+
+            MAINTENANCE
+
+            </option>
+
+
+            <option value="TEST FLIGHT">
+
+            TEST FLIGHT
+
+            </option>
+
+
+            <option value="MISSION">
+
+            MISSION
+
+            </option>
+
+
+            <option value="TRAINING">
+
+            TRAINING
+
+            </option>
+
+
+
+            </select>
+
+
+            </div>
 
             {/* FH GRID */}
 
@@ -597,6 +707,58 @@ export default function LogbookPage() {
                 "
               />
 
+              <input
+                type="number"
+                name="landingGearAdded"
+                placeholder="L/G FC"
+                onChange={handleChange}
+                className="
+                  bg-[#1F2937]
+                  border border-gray-700
+                  p-3
+                  rounded-xl
+                "
+              />
+
+              <input
+                type="number"
+                name="fcuAdded"
+                placeholder="FCU FH"
+                onChange={handleChange}
+                className="
+                  bg-[#1F2937]
+                  border border-gray-700
+                  p-3
+                  rounded-xl
+                "
+              />
+
+              <input
+                type="number"
+                name="fNozzleAdded"
+                placeholder="F Nozzle FH"
+                onChange={handleChange}
+                className="
+                  bg-[#1F2937]
+                  border border-gray-700
+                  p-3
+                  rounded-xl
+                "
+              />
+
+              <input
+                type="number"
+                name="fPumpAdded"
+                placeholder="F Pump FH"
+                onChange={handleChange}
+                className="
+                  bg-[#1F2937]
+                  border border-gray-700
+                  p-3
+                  rounded-xl
+                "
+              />                                                        
+
             </div>
 
             {/* STATUS */}
@@ -605,41 +767,35 @@ export default function LogbookPage() {
               grid grid-cols-2 gap-3
             ">
 
-              <select
-                name="maintenanceStatus"
-                onChange={handleChange}
-                className="
-                  bg-[#1F2937]
-                  border border-gray-700
-                  p-3
-                  rounded-xl
-                "
-              >
+<select
+  name="maintenanceStatus"
+  value={form.maintenanceStatus}
+  onChange={handleChange}
+  disabled={form.action==="TEST FLIGHT"}
+  className="
+    bg-[#1F2937]
+    border border-gray-700
+    p-3
+    rounded-xl
+  "
+>
 
-                <option value="NONE">
-                  NONE
-                </option>
+{maintenanceOptions.map((item)=>(
+  <option
+    key={item}
+    value={item}
+  >
+    {item}
+  </option>
+))}
 
-                <option value="P200">
-                  P200
-                </option>
+</select>
 
-                <option value="P400">
-                  P400
-                </option>
-
-                <option value="HYDRAULIC">
-                  HYDRAULIC
-                </option>
-
-                <option value="ENGINE">
-                  ENGINE
-                </option>
-
-              </select>
+{form.action !== "TEST FLIGHT" && (
 
               <select
                 name="operationalStatus"
+                value={form.operationalStatus}
                 onChange={handleChange}
                 className="
                   bg-[#1F2937]
@@ -665,7 +821,13 @@ export default function LogbookPage() {
                   TEST FLIGHT
                 </option>
 
+                <option value="AOG">
+                  AOG
+                </option>             
+
               </select>
+
+              )}
 
             </div>
 
@@ -673,7 +835,7 @@ export default function LogbookPage() {
 
             <textarea
               name="remarks"
-              placeholder="Remarks"
+              placeholder="Catatan"
               onChange={handleChange}
               className="
                 w-full
@@ -740,7 +902,7 @@ export default function LogbookPage() {
                 text-3xl font-bold
               ">
 
-                Recent Activities
+                Riwayat Logbook
 
               </h2>
 
@@ -748,7 +910,7 @@ export default function LogbookPage() {
                 text-gray-400 mt-2
               ">
 
-                Engineering Activity Timeline
+                Rekam Pengisian Logbook
 
               </p>
 
@@ -762,7 +924,7 @@ export default function LogbookPage() {
               border border-gray-700
               px-4 py-3
               rounded-xl
-              w-[260px]
+              w-[170px]
             ">
 
               <Search className="
@@ -770,7 +932,7 @@ export default function LogbookPage() {
               " />
 
               <input
-                placeholder="Search aircraft..."
+                placeholder="Cari Pesawat..."
                 value={search}
                 onChange={(e) =>
                   setSearch(e.target.value)
@@ -858,6 +1020,14 @@ export default function LogbookPage() {
 
                           </p>
 
+                          <p className="
+                             text-cyan-300 text-sm mt-1
+                          ">
+
+                            {log.Action}
+
+                          </p>                          
+
                         </div>
 
                       </div>
@@ -876,7 +1046,7 @@ export default function LogbookPage() {
                           text-sm
                         ">
 
-                          {log.Action}
+                          {log.MaintenanceStatus}
 
                         </div>
 
@@ -889,6 +1059,7 @@ export default function LogbookPage() {
                         ">
 
                           {log.OperationalStatus}
+                          
 
                         </div>
 
@@ -934,7 +1105,41 @@ export default function LogbookPage() {
                           text-cyan-400 font-semibold
                         ">
 
-                          +{log.FlightHourAdded} FH
+                          <div className="mt-3 text-xs text-gray-400 space-y-1">
+
+                            {Number(log.FlightHourAdded) > 0 && (
+                              <div>AF: +{log.FlightHourAdded}</div>
+                            )}
+
+                            {Number(log.Engine1Added) > 0 && (
+                              <div>ENG1: +{log.Engine1Added}</div>
+                            )}
+
+                            {Number(log.Engine2Added) > 0 && (
+                              <div>ENG2: +{log.Engine2Added}</div>
+                            )}
+
+                            {Number(log.HydraulicAdded) > 0 && (
+                              <div>HYD: +{log.HydraulicAdded}</div>
+                            )}
+
+                            {Number(log.LandingGearAdded) > 0 && (
+                              <div>LG FC: +{log.LandingGearAdded}</div>
+                            )}
+
+                            {Number(log.FCUAdded) > 0 && (
+                              <div>FCU: +{log.FCUAdded}</div>
+                            )}
+
+                            {Number(log.FNozzleAdded) > 0 && (
+                              <div>FN: +{log.FNozzleAdded}</div>
+                            )}
+
+                            {Number(log.FPumpAdded) > 0 && (
+                              <div>FP: +{log.FPumpAdded}</div>
+                            )}
+
+                          </div>
 
                         </span>
 

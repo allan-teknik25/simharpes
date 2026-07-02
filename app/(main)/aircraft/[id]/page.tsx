@@ -7,6 +7,14 @@ import Link from "next/link";
 import { getAircraftData } from "@/services/googleSheet";
 
 import {
+
+getServiceable,
+getHealthScore,
+getAircraftWarnings,
+
+} from "@/services/fleetEngine";
+
+import {
   Plane,
   Wrench,
   ShieldCheck,
@@ -21,7 +29,12 @@ import {
 export default function AircraftDetailPage() {
 
   const params = useParams();
-  const id = params?.id;
+  const id =
+    Array.isArray(params?.id)
+    ?
+    params.id[0]
+    :
+    params?.id;
 
   const [aircraft, setAircraft] = useState<any>(null);
 
@@ -53,23 +66,12 @@ export default function AircraftDetailPage() {
 
   const healthScore = useMemo(() => {
 
-    if (!aircraft) return 0;
+    if (!aircraft)
+      return 0;
 
-    let score = 100;
-
-    if (aircraft.MaintenanceStatus !== "NONE")
-      score -= 25;
-
-    if (aircraft.CertificateStatus === "EXPIRED")
-      score -= 40;
-
-    if (aircraft.SparepartStatus === "WAITING")
-      score -= 20;
-
-    if (Number(aircraft.AirframeFH) >= 350)
-      score -= 15;
-
-    return Math.max(score, 0);
+    return getHealthScore(
+      aircraft
+    );
 
   }, [aircraft]);
 
@@ -78,10 +80,61 @@ export default function AircraftDetailPage() {
   // =================================================
 
   const missionReady =
-    aircraft &&
-    aircraft.MaintenanceStatus === "NONE" &&
-    aircraft.CertificateStatus === "VALID" &&
-    aircraft.SparepartStatus === "READY";
+  aircraft
+  ?
+  getServiceable([aircraft]).length > 0
+  :
+  false;
+
+  const warnings =
+    aircraft
+      ? getAircraftWarnings(
+          aircraft
+        )
+      : [];
+
+  const utilization = [
+    {
+      title:"Airframe",
+      value: aircraft?.AirframeFH,
+      unit:"FH",
+    },
+    {
+      title:"Engine 1",
+      value: aircraft?.Engine1FH,
+      unit:"FH",
+    },
+    {
+      title:"Engine 2",
+      value: aircraft?.Engine2FH,
+      unit:"FH",
+    },
+    {
+      title:"Hydraulic",
+      value: aircraft?.HydraulicFH,
+      unit:"FH",
+    },
+    {
+      title:"FCU",
+      value: aircraft?.FCUFH,
+      unit:"FH",
+    },
+    {
+      title:"F Nozzle",
+      value: aircraft?.FNozzleFH,
+      unit:"FH",
+    },
+    {
+      title:"Fuel Pump",
+      value: aircraft?.FPumpFH,
+      unit:"FH",
+    },
+    {
+      title:"Landing Gear",
+      value: aircraft?.LandingGearFC,
+      unit:"FC",
+    },
+  ];
 
   // =================================================
   // LOADING
@@ -249,7 +302,7 @@ export default function AircraftDetailPage() {
             <div className="text-center">
 
               <div className="text-6xl font-bold">
-                {healthScore}
+                {healthScore}%
               </div>
 
               <div className="text-gray-400 mt-2">
@@ -388,70 +441,47 @@ export default function AircraftDetailPage() {
 
       </div>
 
-      {/* ============================================= */}
-      {/* FH */}
-      {/* ============================================= */}
+{/* ============================================= */}
+{/* UTILIZATION */}
+{/* ============================================= */}
 
-      <div className="grid grid-cols-5 gap-5 mb-6">
+<div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-6">
 
-        {[
-          {
-            title: "Airframe FH",
-            value: aircraft.AirframeFH,
-            color: "text-cyan-400",
-          },
-          {
-            title: "Engine 1 FH",
-            value: aircraft.Engine1FH,
-            color: "text-yellow-400",
-          },
-          {
-            title: "Engine 2 FH",
-            value: aircraft.Engine2FH,
-            color: "text-yellow-400",
-          },
-          {
-            title: "Hydraulic FH",
-            value: aircraft.HydraulicFH,
-            color: "text-green-400",
-          },
-          {
-            title: "Landing Gear FH",
-            value: aircraft.LandingGearFH,
-            color: "text-red-400",
-          },
-        ].map((x, i) => (
+  {utilization.map((x, i) => (
 
-          <div
-            key={i}
-            className="
-              bg-[#111827]
-              border border-gray-800
-              rounded-2xl
-              p-5
-            "
-          >
+    <div
+      key={i}
+      className="
+        bg-[#111827]
+        border border-gray-800
+        rounded-2xl
+        p-5
+        hover:border-cyan-400/40
+        transition-all
+      "
+    >
 
-            <div className="
-              flex items-center gap-2
-              text-gray-400
-            ">
+      <div className="text-gray-400 text-sm">
+        {x.title}
+      </div>
 
-              <Gauge className="w-4 h-4" />
+      <div className="mt-3 flex items-end gap-2">
 
-              {x.title}
+        <div className="text-4xl font-bold text-cyan-400">
+          {x.value ?? 0}
+        </div>
 
-            </div>
-
-            <div className={`${x.color} text-5xl font-bold mt-5`}>
-              {x.value}
-            </div>
-
-          </div>
-
-        ))}
+        <div className="text-sm text-gray-500 mb-1">
+          {x.unit}
+        </div>
 
       </div>
+
+    </div>
+
+  ))}
+
+</div>
 
       {/* ============================================= */}
       {/* ANALYSIS */}
@@ -482,53 +512,60 @@ export default function AircraftDetailPage() {
 
           <div className="space-y-4">
 
-            {Number(aircraft.AirframeFH) >= 350 && (
+            {warnings.length === 0 && (
 
-              <div className="
-                bg-red-500/10
-                border border-red-500/30
-                text-red-400
-                p-4
-                rounded-xl
-              ">
-
-                Airframe approaching maintenance limit.
-
+              <div
+                className="
+                  bg-green-500/10
+                  border border-green-500/30
+                  text-green-400
+                  p-4
+                  rounded-xl
+                "
+              >
+                No tactical warnings detected.
               </div>
 
             )}
 
-            {aircraft.CertificateStatus === "EXPIRED" && (
+            {warnings.map((w, i) => (
 
-              <div className="
-                bg-red-500/10
-                border border-red-500/30
-                text-red-400
-                p-4
-                rounded-xl
-              ">
+              <div
+              key={i}
+              className={`
+              p-4
+              rounded-xl
+              border
 
-                Certificate expired immediately renew.
+              ${
+              w.level==="CRITICAL"
+
+              ?
+
+              "bg-red-500/10 border-red-500/30 text-red-400"
+
+              :
+
+              w.level==="MEDIUM"
+
+              ?
+
+              "bg-yellow-500/10 border-yellow-500/30 text-yellow-400"
+
+              :
+
+              "bg-cyan-500/10 border-cyan-500/30 text-cyan-400"
+
+              }
+
+              `}
+              >
+
+              {w.message}
 
               </div>
 
-            )}
-
-            {aircraft.SparepartStatus === "WAITING" && (
-
-              <div className="
-                bg-cyan-500/10
-                border border-cyan-500/30
-                text-cyan-400
-                p-4
-                rounded-xl
-              ">
-
-                Sparepart logistics pending.
-
-              </div>
-
-            )}
+            ))}
 
           </div>
 

@@ -5,6 +5,15 @@ import { useEffect, useState } from "react";
 import { getAircraftData } from "@/services/googleSheet";
 
 import {
+ getServiceable,
+ getMaintenance,
+ getAOG,
+ getReadiness,
+ getFleetHealth,
+ getAircraftWarnings,
+} from "@/services/fleetEngine";
+
+import {
   CheckCircle2,
   Wrench,
   ShieldAlert,
@@ -118,8 +127,10 @@ export default function Dashboard() {
   );
 
   const readiness = Math.round(
-    (serviceable.length / 10) * 100
+    (serviceable.length / fleet.length) * 100
   );
+
+  const fleetHealth = getFleetHealth(fleet);
 
   // ====================================================
   // READINESS STATUS
@@ -157,66 +168,102 @@ export default function Dashboard() {
   }
 
   // ====================================================
-  // PREDICTION ENGINE
-  // ====================================================
-
-  const predictedReadiness =
-    readiness -
-    (
-      fleet.filter(
-        (f) => Number(f.AirframeFH) >= 350
-      ).length * 10
-    );
-
-  // ====================================================
   // WARNING ENGINE
   // ====================================================
 
   const warnings: any[] = [];
 
-  fleet.forEach((f) => {
+  fleet.forEach((f)=>{
 
-    if (f.CertificateStatus === "EXPIRED") {
+  const aircraftWarning =
+  getAircraftWarnings(f);
 
-      warnings.push({
-        level: "CRITICAL",
-        color: "border-red-500 text-red-400",
-        text: `${f.Aircraft} certificate expired`,
-      });
 
-    }
+  aircraftWarning.forEach(w=>{
 
-    if (f.SparepartStatus === "WAITING") {
 
-      warnings.push({
-        level: "MEDIUM",
-        color: "border-yellow-500 text-yellow-400",
-        text: `${f.Aircraft} waiting sparepart`,
-      });
+  warnings.push({
 
-    }
+    level:w.level,
 
-    if (f.MaintenanceStatus !== "NONE") {
+    color:
+    w.level==="CRITICAL"
+    ?
+    "border-red-500 text-red-400"
 
-      warnings.push({
-        level: "INFO",
-        color: "border-cyan-500 text-cyan-400",
-        text: `${f.Aircraft} under ${f.MaintenanceStatus}`,
-      });
+    :
+    w.level==="MEDIUM"
+    ?
+    "border-yellow-500 text-yellow-400"
 
-    }
+    :
+    "border-cyan-500 text-cyan-400",
 
-    if (Number(f.AirframeFH) >= 350) {
 
-      warnings.push({
-        level: "CRITICAL",
-        color: "border-red-500 text-red-400",
-        text: `${f.Aircraft} nearing airframe limit`,
-      });
-
-    }
+    text:
+    `${f.Aircraft} ${w.message}`
 
   });
+
+
+  });
+
+  });
+
+  
+  // ====================================================
+  // COMAMANDER ASSESSMENT
+  // ====================================================
+
+  const commanderAssessment = [];
+
+  if (
+    readiness >= SASBINPUAN
+  ) {
+
+    commanderAssessment.push(
+      "Kesiapan pesawat telah memenuhi target operasional Sasbinpuan."
+    );
+
+  } else {
+
+    commanderAssessment.push(
+      "Kesiapan pesawat berada dibawah target operasional."
+    );
+
+  }
+
+  const expired =
+    fleet.filter(
+      f =>
+        f.CertificateStatus ===
+        "EXPIRED"
+    );
+
+  if (expired.length) {
+
+    commanderAssessment.push(
+      `${expired.length} Sertifikat Pesawat Kadaluarsa.`
+    );
+
+  }
+
+  const waiting =
+    fleet.filter(
+      f =>
+        f.SparepartStatus ===
+        "WAITING"
+    );
+
+  if (waiting.length) {
+
+    commanderAssessment.push(
+      `${waiting.length} Pesawat dalam kondisi Awaiting Part.`
+    );
+
+  }
+
+  
 
   // ====================================================
   // UI
@@ -224,39 +271,11 @@ export default function Dashboard() {
 
   return (
 
-    <div className="min-h-screen bg-[#0B1120] text-white p-6">
-
-      {/* ================================================= */}
-      {/* HEADER */}
-      {/* ================================================= */}
-
-      <div className="flex justify-between items-center mb-8">
-
-        <div>
-
-          <h1 className="text-3xl font-bold tracking-wide">
-            OPS READINESS CENTER
-          </h1>
-
-          <div className="text-gray-400 mt-1">
-            Rafale Fleet Operational Monitoring
-          </div>
-
-        </div>
-
-        <div className="text-right">
-
-          <div className="text-gray-400 text-sm">
-            Command Time
-          </div>
-
-          <div className="text-3xl font-bold">
-            {clock}
-          </div>
-
-        </div>
-
-      </div>
+<div
+className="
+p-5
+"
+>
 
       {/* ================================================= */}
       {/* QUICK STATUS BAR */}
@@ -340,7 +359,7 @@ export default function Dashboard() {
           </div>
 
           <div className="text-sm text-gray-500 mt-2">
-            Ready for operation
+            Full Mission Capable
           </div>
 
         </div>
@@ -373,7 +392,7 @@ export default function Dashboard() {
           </div>
 
           <div className="text-sm text-gray-500 mt-2">
-            Under maintenance
+            Under Maintenance
           </div>
 
         </div>
@@ -406,7 +425,7 @@ export default function Dashboard() {
           </div>
 
           <div className="text-sm text-gray-500 mt-2">
-            Aircraft unavailable
+            Not Mission Capable
           </div>
 
         </div>
@@ -442,7 +461,7 @@ export default function Dashboard() {
             <div>
 
               <div className="text-gray-400">
-                Readiness Rate
+                Persentase Nilai Kesiapan
               </div>
 
               <div className="text-6xl font-bold mt-2">
@@ -459,23 +478,116 @@ export default function Dashboard() {
 
           {/* DONUT */}
 
-          <div className="flex justify-center my-8">
-            <Donut value={readiness} />
-          </div>
+          <div className="
+            grid
+            grid-cols-2
+            gap-8
+            my-8
+          ">
+            <div
+              className="
+                flex
+                flex-col
+                items-center
+              "
+            >
+              <Donut
+                value={readiness}
+              />
 
-          {/* PREDICTION */}
-
-          <div className="text-center mb-8">
-
-            <div className="text-gray-400 text-sm">
-              Predicted Tomorrow
+              <div
+                className="
+                  mt-4
+                  text-gray-400
+                  text-sm
+                "
+              >
+                READINESS
+              </div>
             </div>
 
-            <div className="text-orange-400 text-2xl font-bold mt-1">
-              {predictedReadiness}%
+            <div
+              className="
+                flex
+                flex-col
+                items-center
+              "
+            >
+              <Donut
+                value={fleetHealth}
+              />
+
+              <div
+                className="
+                  mt-4
+                  text-gray-400
+                  text-sm
+                "
+              >
+                FLEET HEALTH
+              </div>
+            </div>
+          </div>
+
+          {/* COMMANDER ASSESSMENT */}
+          <div
+            className="
+              bg-[#1F2937]
+              border
+              border-gray-700
+              rounded-2xl
+              p-5
+              mb-6
+            "
+          >
+            <div
+              className="
+                text-lg
+                font-bold
+                mb-4
+                text-cyan-400
+              "
+            >
+              Penilaian Saat Ini :
             </div>
 
-          </div>
+            <div className="space-y-3">
+
+              {commanderAssessment.map(
+                (item, i) => (
+
+                  <div
+                    key={i}
+                    className="
+                      flex
+                      items-start
+                      gap-3
+                      text-sm
+                    "
+                  >
+
+                    <div
+                      className="
+                        w-2
+                        h-2
+                        rounded-full
+                        bg-cyan-400
+                        mt-2
+                      "
+                    />
+
+                    <div>
+                      {item}
+                    </div>
+
+                  </div>
+
+                )
+              )}
+
+            </div>
+          </div>          
+
 
           {/* DATE NAV */}
 
@@ -505,7 +617,7 @@ export default function Dashboard() {
               </div>
 
               <div className="text-sm text-gray-400 mt-1">
-                Sasbinpuan Target: {SASBINPUAN}%
+                Target Sasbinpuan: {SASBINPUAN}%
               </div>
 
             </div>

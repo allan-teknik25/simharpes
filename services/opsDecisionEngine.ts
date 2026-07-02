@@ -1,19 +1,43 @@
-export function evaluateOps(readiness: number, sasbinpuan: number) {
-  const pass = readiness >= sasbinpuan;
+export function evaluateOps(
+  readiness: number,
+  sasbinpuan: number
+) {
+
+  let status = "";
+  let severity = "";
+
+  if (readiness >= sasbinpuan + 15) {
+
+    status = "FULLY CAPABLE";
+    severity = "GREEN";
+
+  }
+
+  else if (readiness >= sasbinpuan) {
+
+    status = "CAPABLE";
+    severity = "CYAN";
+
+  }
+
+  else if (readiness >= sasbinpuan - 15) {
+
+    status = "LIMITED";
+    severity = "YELLOW";
+
+  }
+
+  else {
+
+    status = "NOT CAPABLE";
+    severity = "RED";
+
+  }
 
   return {
-    sasbinpuan,
     readiness,
-    status: pass ? "CAPABLE" : "FAIL",
-    severity: pass ? "GREEN" : "RED"
+    sasbinpuan,
+    status,
+    severity,
   };
-}
-
-// ✅ INI WAJIB ADA
-export function generateStaggerPlan(aogFleet: any[]) {
-  return aogFleet.map((a, i) => ({
-    aircraft: a.Aircraft,
-    priority: i + 1,
-    suggestedWindow: `D+${i * 2}`,
-  }));
 }
