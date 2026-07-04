@@ -109,41 +109,39 @@ password
 
 });
 
+console.log("LOGIN RESULT", result);
 
+if (result.success) {
 
-if(result.success){
-
-
-
-localStorage.setItem(
-
-"simharpes_auth",
-
-"true"
-
-);
-
-
+  console.log("USER BEFORE SAVE:", result.user);
 
 localStorage.setItem(
-
-"simharpes_user",
-
-JSON.stringify(
-result.user
-)
-
+  "simharpes_user",
+  JSON.stringify(result.user)
 );
 
-
-
-router.push(
-"/dashboard"
+localStorage.setItem(
+  "simharpes_auth",
+  "true"
 );
 
+setTimeout(() => {
+  router.push("/dashboard");
+}, 100);
 
+  console.log(
+    "AFTER SAVE:",
+    localStorage.getItem("simharpes_user")
+  );
 
+  localStorage.setItem(
+    "simharpes_auth",
+    "true"
+  );
+
+  router.push("/dashboard");
 }
+
 else{
 
 

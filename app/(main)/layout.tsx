@@ -67,18 +67,16 @@ useEffect(() => {
 setMounted(true);
 
 
-const savedUser =
-localStorage.getItem(
-"simharpes_user"
-);
+const savedUser = localStorage.getItem("simharpes_user");
 
-
-if(savedUser){
-
-setUser(
-JSON.parse(savedUser)
-);
-
+if (savedUser && savedUser !== "undefined") {
+  try {
+    console.log("savedUser =", savedUser);
+    setUser(JSON.parse(savedUser));
+  } catch (err) {
+    console.error("Invalid user data:", err);
+    localStorage.removeItem("simharpes_user");
+  }
 }
 
 
