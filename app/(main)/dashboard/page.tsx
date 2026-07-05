@@ -126,11 +126,17 @@ export default function Dashboard() {
       f.SparepartStatus === "READY"
   );
 
-  const readiness = Math.round(
-    (serviceable.length / fleet.length) * 100
-  );
+  const readiness =
+    fleet.length > 0
+      ? Math.round(
+          (serviceable.length / fleet.length) * 100
+        )
+      : 0;
 
-  const fleetHealth = getFleetHealth(fleet);
+  const fleetHealth =
+  fleet.length > 0
+    ? getFleetHealth(fleet)
+    : 0;
 
   // ====================================================
   // READINESS STATUS

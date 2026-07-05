@@ -9,7 +9,7 @@ const SPREADSHEET_ID =
 const GAS_URL =
 process.env.NEXT_PUBLIC_GAS_URL;
 
-
+console.log("GAS URL =", GAS_URL);
 
 function sheetUrl(sheetName:string){
 
